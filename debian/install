@@ -1,0 +1,2 @@
+debian/pyqt6-stylizer-launcher usr/bin/
+debian/pyqt6-stylizer.desktop usr/share/applications/

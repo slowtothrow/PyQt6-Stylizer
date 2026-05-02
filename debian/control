@@ -1,0 +1,22 @@
+Source: pyqt6-stylizer
+Section: python
+Priority: optional
+Maintainer: fabshop <fabshop@localhost>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-python,
+ pybuild-plugin-pyproject,
+ python3-all,
+ python3-setuptools
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: pyqt6-stylizer
+Architecture: all
+Depends:
+ ${misc:Depends},
+ ${python3:Depends},
+ python3-pyqt6
+Description: Hybrid PyQt6 style exploration studio
+ A desktop sandbox for exploring Qt Widgets styling, hybrid canvas composition,
+ and dummy interactions before turning them into real products.

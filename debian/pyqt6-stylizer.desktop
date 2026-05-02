@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=PyQt6 Stylizer
+Comment=Explore PyQt6 interface style, tone, and dummy interactions
+Exec=pyqt6-stylizer
+Icon=applications-graphics
+Categories=Development;Graphics;
+Terminal=false

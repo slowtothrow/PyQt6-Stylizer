@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+unset LD_LIBRARY_PATH
+unset LD_PRELOAD
+unset GTK_PATH
+unset GIO_MODULE_DIR
+unset GSETTINGS_SCHEMA_DIR
+unset LOCPATH
+unset XDG_DATA_DIRS_SAVED
+
+exec /usr/bin/python3 -m pyqt6_stylizer "$@"
