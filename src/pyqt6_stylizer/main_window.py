@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from PyQt6.QtCore import QMimeData, QSettings, QSignalBlocker, Qt
 from PyQt6.QtGui import QAction, QCloseEvent, QKeySequence
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QDockWidget,
+    QFileDialog,
     QFrame,
+    QInputDialog,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMessageBox,
+    QPushButton,
     QStatusBar,
     QToolBar,
     QTreeWidget,
@@ -21,7 +26,9 @@ from PyQt6.QtWidgets import (
 )
 
 from .canvas import StudioScene, StudioView
+from .code_export import CodeExportPanel, generate_code
 from .document import StudioDocument, StudioNode, make_stable_id
+from .global_options import GlobalOptionsPanel
 from .inspector import InspectorPanel
 from .registry import ElementRegistry, PresetRegistry
 
@@ -54,7 +61,7 @@ class MainWindow(QMainWindow):
         self.preset_registry = PresetRegistry.default()
         self._current_preset_id = self.preset_registry.default_preset_id
         self.document = self.preset_registry.instantiate(self._current_preset_id) or StudioDocument.example()
-        self._settings = QSettings("fabshop", "PyQt6Stylizer")
+        self._settings = QSettings("slowtothrow", "PyQt6Stylizer")
         self._dock_widgets: list[QDockWidget] = []
         self._outliner_items: dict[str, QTreeWidgetItem] = {}
 
@@ -133,9 +140,36 @@ class MainWindow(QMainWindow):
         self.actual_size_action.setShortcut(QKeySequence("Ctrl+0"))
         self.actual_size_action.triggered.connect(self._reset_canvas_zoom)
 
+        self.save_canvas_action = QAction("Save Current Canvas State…", self)
+        self.save_canvas_action.setShortcut(QKeySequence("Ctrl+S"))
+        self.save_canvas_action.setToolTip(
+            "Serialises the entire canvas document to a .pyqtcs JSON file so you can reload it later."
+        )
+        self.save_canvas_action.triggered.connect(self._save_canvas_state)
+
+        self.load_canvas_action = QAction("Load Canvas State…", self)
+        self.load_canvas_action.setShortcut(QKeySequence("Ctrl+O"))
+        self.load_canvas_action.setToolTip(
+            "Opens a previously saved .pyqtcs canvas state file and loads it onto the canvas."
+        )
+        self.load_canvas_action.triggered.connect(self._load_canvas_state_from_dialog)
+
+        self.export_code_action = QAction("Export to PyQt6 Code…", self)
+        self.export_code_action.setShortcut(QKeySequence("Ctrl+E"))
+        self.export_code_action.setToolTip(
+            "Generates a complete runnable PyQt6 Python script from the current canvas and opens the Code Export panel."
+        )
+        self.export_code_action.triggered.connect(self._trigger_code_export)
+
     def _create_menus(self) -> None:
         file_menu = self.menuBar().addMenu("&File")
         file_menu.addAction(self.reload_preset_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.save_canvas_action)
+        file_menu.addAction(self.load_canvas_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.export_code_action)
+        file_menu.addSeparator()
         file_menu.addAction(self.duplicate_selected_action)
         file_menu.addAction(self.delete_selected_action)
 
@@ -161,15 +195,21 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.fit_canvas_action)
         toolbar.addAction(self.frame_selection_action)
         toolbar.addAction(self.actual_size_action)
+        toolbar.addSeparator()
+        toolbar.addAction(self.save_canvas_action)
+        toolbar.addAction(self.load_canvas_action)
+        toolbar.addAction(self.export_code_action)
+        toolbar.addSeparator()
         toolbar.addAction(self.reset_layout_action)
         toolbar.addSeparator()
 
         workflow_label = QLabel(
-            "Start here: fit the canvas, explore the showcase, duplicate a favorite example, then drag, resize, or delete it on the canvas before refining it in Properties or the JSON block pane.",
+            "Fit (F) · Frame (⇧F) · Duplicate (Ctrl+D) · Delete · Save (Ctrl+S) · Load (Ctrl+O) · Export Code (Ctrl+E)",
             toolbar,
         )
         workflow_label.setToolTip(
-            "Use F to fit the whole showcase, Shift+F to frame the current selection, scroll the mouse wheel to zoom under the cursor, middle-mouse drag to pan, Delete to remove it, and Esc to clear selection."
+            "Use F to fit the whole showcase, Shift+F to frame the current selection, "
+            "Ctrl+S to save canvas state, Ctrl+O to load one, Ctrl+E to export PyQt6 code."
         )
         toolbar.addWidget(workflow_label)
 
@@ -197,6 +237,13 @@ class MainWindow(QMainWindow):
             widget=self._create_outliner_tree(),
         )
 
+        canvas_states_dock = self._add_dock(
+            title="Canvas States",
+            object_name="dock.canvasStates",
+            area=Qt.DockWidgetArea.LeftDockWidgetArea,
+            widget=self._create_canvas_states_panel(),
+        )
+
         inspector_dock = self._add_dock(
             title="Properties",
             object_name="dock.inspector",
@@ -217,6 +264,25 @@ class MainWindow(QMainWindow):
                     "Error state",
                 ]
             ),
+        )
+
+        # Global App Options — live QApplication controls
+        self._global_options_panel = GlobalOptionsPanel(self)
+        global_options_dock = self._add_dock(
+            title="Global App Options",
+            object_name="dock.globalOptions",
+            area=Qt.DockWidgetArea.RightDockWidgetArea,
+            widget=self._global_options_panel,
+        )
+
+        # Code Export — generates runnable PyQt6 from the canvas
+        self._code_export_panel = CodeExportPanel(self)
+        self._code_export_panel.generate_requested.connect(self._handle_code_export_generate)
+        code_export_dock = self._add_dock(
+            title="Code Export",
+            object_name="dock.codeExport",
+            area=Qt.DockWidgetArea.RightDockWidgetArea,
+            widget=self._code_export_panel,
         )
 
         user_test_dock = self._add_dock(
@@ -254,8 +320,11 @@ class MainWindow(QMainWindow):
 
         self.tabifyDockWidget(examples_dock, library_dock)
         self.tabifyDockWidget(library_dock, outliner_dock)
+        self.tabifyDockWidget(outliner_dock, canvas_states_dock)
         self.tabifyDockWidget(inspector_dock, interaction_dock)
-        self.tabifyDockWidget(interaction_dock, tokens_dock)
+        self.tabifyDockWidget(interaction_dock, global_options_dock)
+        self.tabifyDockWidget(global_options_dock, code_export_dock)
+        self.tabifyDockWidget(code_export_dock, tokens_dock)
         self.tabifyDockWidget(user_test_dock, history_dock)
         examples_dock.raise_()
         inspector_dock.raise_()
@@ -626,6 +695,182 @@ class MainWindow(QMainWindow):
         self._refresh_user_test_guide()
         self.statusBar().showMessage(f"Loaded example: {self.document.title}", 2500)
         return document
+
+    # ── Canvas States ─────────────────────────────────────────────────────────
+
+    def _create_canvas_states_panel(self) -> QWidget:
+        """Build the Canvas States dock widget content."""
+        panel = QWidget(self)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+
+        heading = QLabel(
+            "<b>Canvas States</b><br>"
+            "Save the current canvas so you can switch between ideas freely.  "
+            "Each saved state is a portable JSON file — share it or open it in any future session."
+        )
+        heading.setWordWrap(True)
+        heading.setTextFormat(Qt.TextFormat.RichText)
+        heading.setStyleSheet("color: #2c4258; font-size: 11px;")
+        layout.addWidget(heading)
+
+        save_btn = QPushButton("Save Current Canvas State…", panel)
+        save_btn.setToolTip(
+            "Ctrl+S  —  Saves the entire canvas document to a .pyqtcs JSON file.\n"
+            "You can reload it at any time to restore this exact state."
+        )
+        save_btn.clicked.connect(self._save_canvas_state)
+        layout.addWidget(save_btn)
+
+        load_btn = QPushButton("Load Canvas State…", panel)
+        load_btn.setToolTip(
+            "Ctrl+O  —  Open a previously saved .pyqtcs canvas file and load it onto the canvas."
+        )
+        load_btn.clicked.connect(self._load_canvas_state_from_dialog)
+        layout.addWidget(load_btn)
+
+        recent_label = QLabel("Recent states (double-click to reload):")
+        recent_label.setStyleSheet("font-size: 11px; color: #405261; margin-top: 4px;")
+        layout.addWidget(recent_label)
+
+        self._canvas_states_list = QListWidget(panel)
+        self._canvas_states_list.setToolTip(
+            "Double-click a recent state to reload it onto the canvas."
+        )
+        self._canvas_states_list.itemDoubleClicked.connect(self._handle_canvas_state_activation)
+        layout.addWidget(self._canvas_states_list, stretch=1)
+
+        remove_btn = QPushButton("Remove from Recent List", panel)
+        remove_btn.setToolTip(
+            "Removes the selected entry from the recent list (does not delete the file)."
+        )
+        remove_btn.clicked.connect(self._remove_canvas_state_from_recent)
+        layout.addWidget(remove_btn)
+
+        self._refresh_canvas_states_list()
+        return panel
+
+    def _canvas_states_dir(self) -> Path:
+        states_dir = Path.home() / ".local" / "share" / "pyqt6-stylizer" / "states"
+        states_dir.mkdir(parents=True, exist_ok=True)
+        return states_dir
+
+    def _recent_state_paths(self) -> list[str]:
+        raw = self._settings.value("canvas_states/recent", [])
+        return list(raw) if isinstance(raw, list) else []
+
+    def _add_to_recent_states(self, path_str: str) -> None:
+        recent = self._recent_state_paths()
+        if path_str in recent:
+            recent.remove(path_str)
+        recent.insert(0, path_str)
+        self._settings.setValue("canvas_states/recent", recent[:20])
+        self._refresh_canvas_states_list()
+
+    def _refresh_canvas_states_list(self) -> None:
+        if not hasattr(self, "_canvas_states_list"):
+            return
+        with QSignalBlocker(self._canvas_states_list):
+            self._canvas_states_list.clear()
+            for path_str in self._recent_state_paths():
+                p = Path(path_str)
+                item = QListWidgetItem(p.name, self._canvas_states_list)
+                item.setData(Qt.ItemDataRole.UserRole, path_str)
+                item.setToolTip(
+                    path_str + ("" if p.exists() else "\n(file no longer found)")
+                )
+
+    def _save_canvas_state(self) -> None:
+        default_name = (
+            self.document.title.replace(" ", "_").replace("/", "-") + ".pyqtcs"
+        )
+        path_str, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Current Canvas State",
+            str(self._canvas_states_dir() / default_name),
+            "PyQt6 Stylizer Documents (*.pyqtcs);;JSON Files (*.json);;All Files (*)",
+        )
+        if not path_str:
+            return
+        try:
+            Path(path_str).write_text(self.document.to_json(), encoding="utf-8")
+        except OSError as exc:
+            QMessageBox.critical(self, "Save Failed", f"Could not write file:\n{exc}")
+            return
+        self._add_to_recent_states(path_str)
+        self.setWindowTitle(f"PyQt6 Stylizer - {Path(path_str).name}")
+        self.statusBar().showMessage(f"Saved canvas state to {path_str}", 3000)
+
+    def _load_canvas_state_from_dialog(self) -> None:
+        path_str, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Canvas State",
+            str(self._canvas_states_dir()),
+            "PyQt6 Stylizer Documents (*.pyqtcs);;JSON Files (*.json);;All Files (*)",
+        )
+        if path_str:
+            self._load_canvas_from_file(path_str)
+
+    def _load_canvas_from_file(self, path_str: str) -> None:
+        path = Path(path_str)
+        if not path.exists():
+            QMessageBox.warning(
+                self,
+                "File Not Found",
+                f"The canvas state file could not be found:\n{path_str}",
+            )
+            return
+        try:
+            raw = path.read_text(encoding="utf-8")
+            document = StudioDocument.from_json(raw)
+        except (OSError, json.JSONDecodeError, KeyError, ValueError) as exc:
+            QMessageBox.critical(
+                self,
+                "Load Failed",
+                f"Could not load canvas state:\n{exc}",
+            )
+            return
+        self.document = document
+        self._current_preset_id = ""
+        self._update_reload_action()
+        self.setWindowTitle(f"PyQt6 Stylizer - {path.name}")
+        self._rerender_and_reselect(None)
+        self._fit_canvas()
+        self._refresh_user_test_guide()
+        self._add_to_recent_states(path_str)
+        self.statusBar().showMessage(f"Loaded canvas state: {path.name}", 3000)
+
+    def _handle_canvas_state_activation(self, item: QListWidgetItem) -> None:
+        path_str = item.data(Qt.ItemDataRole.UserRole)
+        if isinstance(path_str, str):
+            self._load_canvas_from_file(path_str)
+
+    def _remove_canvas_state_from_recent(self) -> None:
+        selected = self._canvas_states_list.currentItem()
+        if selected is None:
+            return
+        path_str = selected.data(Qt.ItemDataRole.UserRole)
+        recent = self._recent_state_paths()
+        if path_str in recent:
+            recent.remove(path_str)
+            self._settings.setValue("canvas_states/recent", recent)
+        self._refresh_canvas_states_list()
+        self.statusBar().showMessage("Removed from recent list.", 2000)
+
+    # ── Code Export ───────────────────────────────────────────────────────────
+
+    def _trigger_code_export(self) -> None:
+        self._handle_code_export_generate()
+        dock = self.findChild(QDockWidget, "dock.codeExport")
+        if dock is not None:
+            dock.show()
+            dock.raise_()
+
+    def _handle_code_export_generate(self) -> None:
+        code = generate_code(self.document)
+        self._code_export_panel.set_code(code)
+        self.statusBar().showMessage("Generated PyQt6 code — see Code Export panel.", 2500)
 
     def _reload_current_preset(self) -> None:
         reloaded = self.load_preset(self._current_preset_id)

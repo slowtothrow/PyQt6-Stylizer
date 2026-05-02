@@ -1,7 +1,7 @@
 Source: pyqt6-stylizer
 Section: python
 Priority: optional
-Maintainer: fabshop <fabshop@localhost>
+Maintainer: slowtothrow <slowtothrow@users.noreply.github.com>
 Build-Depends:
  debhelper-compat (= 13),
  dh-python,

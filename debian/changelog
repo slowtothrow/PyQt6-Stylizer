@@ -2,4 +2,4 @@ pyqt6-stylizer (0.1.0-1) unstable; urgency=medium
 
   * Initial packaging skeleton for the PyQt6 style exploration studio.
 
- -- fabshop <fabshop@localhost>  Thu, 01 May 2026 00:00:00 +0000
+ -- slowtothrow <slowtothrow@users.noreply.github.com>  Thu, 01 May 2026 00:00:00 +0000

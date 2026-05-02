@@ -10,7 +10,7 @@ def create_application() -> QApplication:
     if app is None:
         app = QApplication([])
 
-    app.setOrganizationName("fabshop")
+    app.setOrganizationName("slowtothrow")
     app.setApplicationName("PyQt6 Stylizer")
     app.setApplicationDisplayName("PyQt6 Stylizer")
     app.setStyle("Fusion")

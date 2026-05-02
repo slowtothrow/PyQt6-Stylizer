@@ -1,94 +1,213 @@
 # PyQt6 Stylizer
 
-PyQt6 Stylizer is a Linux-first desktop studio for exploring the visual tone and interaction density of Qt Widgets applications. The current refactor centers everything on one giant showcase canvas built on `QGraphicsView`, with many inspectable examples that can be duplicated, moved, restyled, and rewritten through structured JSON.
+> **A Linux-first desktop studio for learning, exploring, and exporting PyQt6 widget styles and layouts.**
 
-## Current milestone
+PyQt6 Stylizer is an interactive teaching tool and visual sandbox for Qt Widgets development. It gives you a live canvas full of real, inspectable widgets — buttons, sliders, dialogs, tables, nested layouts, and more — that you can select, resize, restyle, and duplicate in real time. When you are happy with what you have built, export a complete, runnable PyQt6 Python script with tutorial comments included.
 
-- Hybrid shell: `QMainWindow` with a `QGraphicsView` canvas and dockable tool panels.
-- Document-backed canvas rendering with synchronized scene and outliner selection.
-- One large showcase canvas with simple controls, flyouts, dialogs, scroll regions, tables, dense nested shells, and styling studies side by side.
-- Live duplication plus property and JSON block editing so any example can be forked and customized directly on the canvas.
-- Ubuntu and Debian-ready launcher strategy that clears snap-polluted environment variables.
+---
 
-## Repository notes
+## Features
 
-- The repository is designed for a Linux-first PyQt6 workflow with a document-backed canvas that synchronizes editable JSON, live previews, and a drag-resize surface.
-- The canvas examples are deliberately built to remain selectable and movable, including embedded widget previews that forward selection from child controls to the owning canvas node.
-- Use `scripts/launch.sh` with `QT_QPA_PLATFORM=xcb` on this system to run the UI reliably under the current environment.
+- **Live canvas** built on `QGraphicsView` — drag, resize, and rearrange widget examples without touching code
+- **Inspector panel** — edit core widget properties and dynamic extra properties with a built-in property library of ~36 documented examples
+- **Global App Options** — live `QApplication`-level controls: style, font, palette color roles, and application-wide stylesheet
+- **Code Export** — generate a complete, ready-to-run PyQt6 Python script from the current canvas state with inline tutorial comments
+- **Save / Load canvas states** — persist and reload `.pyqtcs` snapshots of your full canvas
+- **Preset system** — ship and load named example canvases; includes a rich `showcase-playground` preset
+- **Outliner** — synchronized tree view of every canvas element for quick selection
+- **Ubuntu/Debian native** — ships a `debian/` packaging skeleton and a snap-safe launcher
 
-## Ubuntu development setup
+---
 
-Use the system `python3-pyqt6` package on Ubuntu instead of pip-installing PyQt6 alongside your project dependencies.
+## Quick Start — Ubuntu / Debian
+
+### Option A — Install from `.deb` (recommended for end users)
+
+Download the latest `.deb` from the [Releases page](https://github.com/slowtothrow/PyQt6-Stylizer/releases) and run:
 
 ```bash
-sudo apt install python3-pyqt6 python3-venv
+sudo apt install ./pyqt6-stylizer_0.1.0-1_all.deb
+pyqt6-stylizer
+```
+
+The `.deb` pulls in `python3-pyqt6` automatically as a dependency.
+
+### Option B — pip / pipx (any Linux distro)
+
+```bash
+# system PyQt6 first — avoids mixing system Qt and pip Qt
+sudo apt install python3-pyqt6
+
+# install the app into an isolated environment
+pipx install git+https://github.com/slowtothrow/PyQt6-Stylizer.git
+
+pyqt6-stylizer
+```
+
+### Option C — Development setup from source
+
+```bash
+# 1. system PyQt6 (avoids pip version conflicts with system Qt)
+sudo apt install python3-pyqt6 python3-venv python3-dev
+
+# 2. clone
+git clone https://github.com/slowtothrow/PyQt6-Stylizer.git
+cd PyQt6-Stylizer
+
+# 3. create venv that can see the system PyQt6
 python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e .[dev]
+
+# 4. install project in editable mode with dev extras
+pip install -e ".[dev]"
+
+# 5. run
 python -m pyqt6_stylizer
 ```
 
-If you prefer a shell launcher, use `scripts/launch.sh`. It unsets the environment variables exported by the VS Code snap before execing Python.
+> **VS Code / snap users:** If you launch from a VS Code snap terminal, use `scripts/launch.sh` instead. It unsets the snap-exported environment variables that break Qt library loading.
+>
+> ```bash
+> bash scripts/launch.sh
+> ```
 
-## Startup shortcuts
+---
 
-You can start directly in the showcase playground and reload it whenever you want a clean baseline.
+## Building the `.deb` package
+
+The `debian/` directory contains a complete `debhelper` packaging skeleton.
 
 ```bash
-python -m pyqt6_stylizer --list-presets
+sudo apt install debhelper dh-python pybuild-plugin-pyproject python3-all python3-setuptools
+
+cd PyQt6-Stylizer
+dpkg-buildpackage -us -uc -b
+
+# the .deb lands one directory up
+sudo apt install ../pyqt6-stylizer_0.1.0-1_all.deb
+```
+
+---
+
+## CLI reference
+
+```
+usage: pyqt6-stylizer [-h] [--preset PRESET_ID] [--list-presets]
+                       [--write-repository-gui-evaluation-prompt [FILE]]
+                       [--report-repository-root DIR]
+
+Options:
+  --preset PRESET_ID          Load a named preset on startup
+  --list-presets               Print available preset IDs and exit
+  --write-repository-gui-evaluation-prompt [FILE]
+                               Write the AI-assisted repository analysis
+                               prompt template to FILE (default: prompt.md)
+  --report-repository-root DIR
+                               Root directory for the evaluation prompt
+```
+
+### Examples
+
+```bash
+# start on the showcase playground preset
 python -m pyqt6_stylizer --preset showcase-playground
+
+# print available presets
+python -m pyqt6_stylizer --list-presets
 ```
 
-## Canvas controls
+---
 
-The showcase is intentionally large, so the fastest way to work is to stay on the canvas as much as possible.
+## Canvas keyboard shortcuts
 
-- `F` fits the full showcase back into view.
-- `Shift+F` frames the current selection.
-- `Ctrl+D` duplicates the selected example.
-- `Delete` or `Backspace` removes the current selection.
-- Scroll the mouse wheel to zoom in or out under the cursor.
-- Middle-mouse drag pans the canvas.
-- `Esc` clears the current selection.
-- Drag the lower-right corner of a selected example to resize it directly on the canvas.
+| Key | Action |
+|-----|--------|
+| `F` | Fit entire canvas in view |
+| `Shift+F` | Frame the current selection |
+| `Ctrl+D` | Duplicate selected element |
+| `Delete` / `Backspace` | Remove selected element |
+| `Ctrl+S` | Save canvas state to file |
+| `Ctrl+O` | Load canvas state from file |
+| `Ctrl+E` | Open Code Export panel |
+| Mouse wheel | Zoom under cursor |
+| Middle-mouse drag | Pan canvas |
+| `Esc` | Clear selection |
+| Drag resize handle | Resize selected element |
 
-## Repository GUI Evaluation Prompt
+---
 
-The repo also ships a prompt generator for AI-assisted PyQt6 repository analysis. It writes a `prompt.md` template that tells another agent how to interrogate any repository, extract PyQt6 architecture/styling patterns, and anonymize identifying details with silly placeholder names.
+## Project layout
+
+```
+src/pyqt6_stylizer/        Application package
+  app.py                     QApplication factory and entry point
+  main_window.py             QMainWindow — orchestrates all docks
+  canvas/                    QGraphicsView/Scene canvas
+  document/                  JSON-backed document model (StudioDocument)
+  inspector/                 Properties panel + property library
+  global_options/            Live QApplication-level controls panel
+  code_export/               PyQt6 code generator and export panel
+  registry/                  Element and preset registries
+tests/                       Pure-Python unit tests (offscreen Qt)
+docs/                        Architecture notes, schema, preset inspirations
+scripts/                     Developer launchers (snap-safe)
+debian/                      Debian packaging skeleton
+```
+
+---
+
+## Canvas state file format
+
+Canvas states are saved as `.pyqtcs` files (plain JSON). They contain the full `StudioDocument` — all nodes, their positions, sizes, properties, and theme tokens. Default save location: `~/.local/share/pyqt6-stylizer/states/`.
+
+---
+
+## Running the tests
 
 ```bash
-python -m pyqt6_stylizer --write-repository-gui-evaluation-prompt
-python -m pyqt6_stylizer --write-repository-gui-evaluation-prompt prompt.md --report-repository-root /path/to/repo
+# headless — no display required
+QT_QPA_PLATFORM=offscreen PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-The generated prompt preserves real PyQt6 APIs and technical behavior, but instructs the answering agent to replace repository names, files, classes, functions, variables, and textual copy with invented placeholders while still extracting styling systems, widget inventories, and unique implementations.
+All 30 tests run against the offscreen Qt platform; no physical display or GPU is needed.
 
-## Layout
+---
 
-```text
-src/pyqt6_stylizer/    Application package
-tests/                 Pure-Python tests for schema and non-GUI logic
-docs/                  Initial architecture and schema notes
-scripts/               Local developer launchers
-debian/                Debian packaging skeleton
-```
+## Code Export
 
-## Validation
+The **Code Export** dock (`Ctrl+E`) converts the current canvas into a complete, self-contained PyQt6 Python script. Each widget is translated with:
 
-The repo is structured so the document layer and CLI stay testable without importing the GUI runtime, but GUI validation still depends on the system `python3-pyqt6` package on Ubuntu.
+- Correct import statements
+- `setGeometry()` positioning
+- Stylesheet properties mapped to `setStyleSheet()`
+- Behavioral properties (`setEnabled`, `setVisible`, `setFlat`, etc.)
+- A `QGraphicsOpacityEffect` where opacity is set
+- Tutorial comments explaining every API call
 
-```bash
-PYTHONPATH=src python3 -m unittest discover -s tests
-QT_QPA_PLATFORM=offscreen PYTHONPATH=src python3 -m unittest tests.test_main_window
-```
+The generated script runs immediately with `python generated_ui.py` (requires `python3-pyqt6`).
 
-## Initial user test
+---
 
-Use Showcase, Add to Canvas, Properties, and the User Test Guide together.
+## Global App Options
 
-1. Start in `showcase-playground` and ask the tester which examples feel simplest versus densest at a glance.
-2. Ask the tester to open at least one flyout and one dialog without guidance.
-3. Ask the tester to duplicate one example, move it, and change live values in Properties.
-4. Ask the tester to edit one obvious field in the duplicated block JSON and click `Apply Block`.
-5. Capture confusion around discoverability, popup triggers, duplication flow, density, and whether the examples feel broad enough to inspire real product directions.
+The **Global App Options** dock lets you experiment with application-wide Qt settings live:
+
+| Control | PyQt6 API |
+|---------|-----------|
+| Style (Fusion, Windows, …) | `QApplication.setStyle()` |
+| Font family + size | `QApplication.setFont()` |
+| Palette color roles | `QApplication.setPalette()` |
+| Application stylesheet | `QApplication.setStyleSheet()` |
+| Reset to defaults | Restores Fusion + system palette |
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
+## License
+
+[MIT](LICENSE)
