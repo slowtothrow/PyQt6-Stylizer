@@ -33,6 +33,7 @@ from .document import StudioDocument, StudioNode, make_stable_id
 from .global_options import GlobalOptionsPanel
 from .inspector import InspectorPanel
 from .registry import ElementRegistry, PresetRegistry
+from .styles import MAIN_WINDOW_STYLESHEET
 
 
 class ElementPaletteList(QListWidget):
@@ -72,6 +73,7 @@ class MainWindow(QMainWindow):
         self.setObjectName("mainWindow")
         self.setWindowTitle(f"PyQt6 Stylizer - {self.document.title}")
         self.resize(1440, 920)
+        self.setStyleSheet(MAIN_WINDOW_STYLESHEET)
         self.setDockOptions(
             QMainWindow.DockOption.AnimatedDocks
             | QMainWindow.DockOption.AllowNestedDocks
@@ -232,7 +234,7 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
 
         workflow_label = QLabel(
-            "New (Ctrl+N) · Undo (Ctrl+Z) · Redo (Ctrl+⇧Z) · Fit (F) · Frame (⇧F) · Dup (Ctrl+D) · Save (Ctrl+S) · Export (Ctrl+E)",
+            "Mission control: New · Undo · Redo · Fit · Frame · Duplicate · Save · Export",
             toolbar,
         )
         workflow_label.setToolTip(
@@ -346,7 +348,7 @@ class MainWindow(QMainWindow):
     def _create_status_bar(self) -> None:
         status_bar = QStatusBar(self)
         status_bar.showMessage(
-            "Explore the showcase, use F to fit the canvas, duplicate or delete examples, then edit them live or through the structured block pane."
+            "Load a gallery board, frame it with F, then duplicate, tune, and export the pieces you want to keep."
         )
         self.setStatusBar(status_bar)
 
@@ -443,7 +445,11 @@ class MainWindow(QMainWindow):
             return
 
         source_references = self.document.meta.get("source_references", [])
-        source_text = ", ".join(str(reference) for reference in source_references) or "Internal baseline"
+        source_text = (
+            f"Public GitHub research set ({len(source_references)} source repo{'s' if len(source_references) != 1 else ''})"
+            if source_references
+            else "Internal baseline"
+        )
         selected_ids = self.scene.selected_node_ids()
         selected_text = "Nothing selected yet"
         if selected_ids:

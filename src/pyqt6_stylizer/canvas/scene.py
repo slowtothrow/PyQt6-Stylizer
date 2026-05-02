@@ -443,12 +443,12 @@ class StudioScene(QGraphicsScene):
         card.set_node_rect(width, height)
         card.setPos(x, y)
         card.setBrush(QBrush(QColor(fill)))
-        card.setPen(QPen(QColor("#33281d"), 2.0))
+        card.setPen(QPen(QColor("#9eb4cc"), 1.4))
         self._apply_interaction_flags(card, node)
         self.addItem(card)
 
         title = QGraphicsTextItem(node.label, card)
-        title.setDefaultTextColor(QColor("#33281d"))
+        title.setDefaultTextColor(QColor("#162332"))
         title.setPos(16.0, 14.0)
         title.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
 
@@ -462,7 +462,7 @@ class StudioScene(QGraphicsScene):
             card,
         )
         body.setTextWidth(max(width - 40.0, 120.0))
-        body.setDefaultTextColor(QColor("#5e5040"))
+        body.setDefaultTextColor(QColor("#526273"))
         body.setPos(16.0, 52.0)
         body.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
 
@@ -479,57 +479,57 @@ class StudioScene(QGraphicsScene):
         container.setStyleSheet(
             """
             QFrame#widgetCard {
-                background: #fffef8;
-                border: 2px solid #192533;
-                border-radius: 16px;
+                background: #ffffff;
+                border: 1px solid #cfdceb;
+                border-radius: 20px;
             }
             QWidget#demoWell, QFrame#demoWell {
-                background: #f7f4ec;
-                border: 1px solid #d9cfbf;
-                border-radius: 14px;
+                background: #f5f8fc;
+                border: 1px solid #dbe5f0;
+                border-radius: 16px;
             }
             QLabel[role='eyebrow'] {
-                color: #5a6b78;
+                color: #5d7086;
                 font-size: 11px;
-                font-weight: 600;
-                letter-spacing: 0.12em;
+                font-weight: 700;
+                letter-spacing: 0.10em;
             }
             QLabel[role='headline'] {
-                color: #192533;
+                color: #162332;
                 font-size: 20px;
                 font-weight: 700;
             }
             QLabel[role='caption'] {
-                color: #566775;
+                color: #607284;
                 font-size: 11px;
                 font-weight: 600;
-                letter-spacing: 0.06em;
+                letter-spacing: 0.04em;
             }
             QPushButton {
-                background: #192533;
+                background: #2f80ed;
                 border: none;
-                border-radius: 10px;
-                color: #f7efe6;
+                border-radius: 11px;
+                color: #f8fbff;
                 padding: 10px 14px;
-                font-weight: 600;
+                font-weight: 700;
             }
             QPushButton:hover {
-                background: #31485e;
+                background: #1f6ad1;
             }
             QToolButton {
-                background: #223647;
+                background: #1b2b3f;
                 border: none;
                 border-radius: 10px;
-                color: #f7efe6;
+                color: #f8fbff;
                 padding: 8px 12px;
                 font-weight: 600;
             }
             QToolButton:hover {
-                background: #36506a;
+                background: #29435f;
             }
             QLineEdit, QComboBox, QSpinBox, QPlainTextEdit, QListWidget, QTreeWidget, QTableWidget, QTabWidget::pane, QToolBox {
-                background: #fffdf8;
-                border: 1px solid #d4cab8;
+                background: #ffffff;
+                border: 1px solid #d7e1ec;
                 border-radius: 10px;
             }
             QLineEdit, QComboBox, QSpinBox {
@@ -544,12 +544,12 @@ class StudioScene(QGraphicsScene):
                 background: transparent;
             }
             QGroupBox {
-                border: 1px solid #d4cab8;
+                border: 1px solid #d7e1ec;
                 border-radius: 12px;
                 margin-top: 10px;
                 padding-top: 12px;
                 font-weight: 700;
-                color: #253746;
+                color: #203246;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
@@ -557,11 +557,11 @@ class StudioScene(QGraphicsScene):
                 padding: 0 4px;
             }
             QHeaderView::section {
-                background: #e8dfcf;
-                color: #223647;
+                background: #eef4fb;
+                color: #203246;
                 border: none;
-                border-right: 1px solid #d4cab8;
-                border-bottom: 1px solid #d4cab8;
+                border-right: 1px solid #d7e1ec;
+                border-bottom: 1px solid #d7e1ec;
                 padding: 6px 8px;
                 font-weight: 700;
             }
@@ -642,17 +642,45 @@ class StudioScene(QGraphicsScene):
         kind = str(node.properties.get("kind", "simple-controls"))
         builders: dict[str, Callable[[StudioNode, QWidget], QWidget]] = {
             "simple-controls": self._build_simple_controls_demo,
+            "button-card": self._build_simple_controls_demo,
+            "copy-tester": self._build_simple_controls_demo,
+            "theme-switcher": self._build_simple_controls_demo,
+            "palette-probe": self._build_simple_controls_demo,
+            "icon-surface": self._build_simple_controls_demo,
+            "search-inputs": self._build_simple_controls_demo,
+            "auth-shell": self._build_simple_controls_demo,
             "choice-matrix": self._build_choice_matrix_demo,
             "slider-lab": self._build_slider_lab_demo,
+            "range-slider-lab": self._build_slider_lab_demo,
+            "timeline-review": self._build_slider_lab_demo,
             "font-color-lab": self._build_font_color_demo,
+            "colormap-bench": self._build_font_color_demo,
             "flyout-lab": self._build_flyout_demo,
+            "command-palette-lab": self._build_flyout_demo,
             "dialog-lab": self._build_dialog_demo,
+            "multi-dialog-flow": self._build_dialog_demo,
             "scroll-gallery": self._build_scroll_gallery_demo,
+            "card-gallery": self._build_scroll_gallery_demo,
             "navigation-workspace": self._build_navigation_workspace_demo,
+            "navigation-rail": self._build_navigation_workspace_demo,
+            "search-strip": self._build_navigation_workspace_demo,
+            "settings-stack": self._build_navigation_workspace_demo,
+            "left-rail": self._build_navigation_workspace_demo,
+            "content-stack": self._build_navigation_workspace_demo,
+            "settings-drawer": self._build_navigation_workspace_demo,
+            "frameless-shell": self._build_navigation_workspace_demo,
             "inspector-tree": self._build_inspector_tree_demo,
+            "parameter-tree": self._build_inspector_tree_demo,
+            "dense-inspector": self._build_inspector_tree_demo,
             "data-table-console": self._build_data_table_demo,
+            "plot-pane": self._build_data_table_demo,
+            "interaction-matrix": self._build_data_table_demo,
+            "ops-console": self._build_data_table_demo,
             "effects-lab": self._build_effects_demo,
+            "effects-studio": self._build_effects_demo,
             "workspace-shell": self._build_workspace_shell_demo,
+            "creator-shell": self._build_workspace_shell_demo,
+            "chat-ops-shell": self._build_workspace_shell_demo,
         }
         builder = builders.get(kind, self._build_generic_widget_demo)
         return builder(node, host)

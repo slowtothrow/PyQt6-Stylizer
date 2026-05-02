@@ -3,6 +3,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import QApplication
 
 from .main_window import MainWindow
+from .styles import apply_application_palette
 
 
 def create_application() -> QApplication:
@@ -14,6 +15,7 @@ def create_application() -> QApplication:
     app.setApplicationName("PyQt6 Stylizer")
     app.setApplicationDisplayName("PyQt6 Stylizer")
     app.setStyle("Fusion")
+    apply_application_palette(app)
     return app
 
 

@@ -42,8 +42,10 @@ class CliTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertEqual(exit_code, 0)
-        self.assertIn("showcase-playground: UI Showcase Playground", rendered)
-        self.assertNotIn("plot-control-workbench", rendered)
+        self.assertIn("showcase-playground", rendered)
+        self.assertIn("plot-control-workbench", rendered)
+        self.assertIn("dracula-app-shell", rendered)
+        self.assertIn("telemetry-mission-board", rendered)
 
     def test_main_writes_repository_gui_evaluation_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
