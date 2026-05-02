@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
+    QStyleFactory,
     QVBoxLayout,
     QWidget,
 )
@@ -96,8 +97,6 @@ _STYLESHEET_PLACEHOLDER = """\
    Leave empty and click Clear to remove all overrides.
 */"""
 
-_AVAILABLE_STYLES = ["Fusion", "Windows", "WindowsVista", "Windows11", "gtk2", "macOS"]
-
 
 class GlobalOptionsPanel(QWidget):
     """Dock panel that exposes all major QApplication-level PyQt6 options.
@@ -161,7 +160,8 @@ class GlobalOptionsPanel(QWidget):
         layout.addWidget(note)
 
         self._style_combo = QComboBox(group)
-        self._style_combo.addItems(_AVAILABLE_STYLES)
+        available_styles = QStyleFactory.keys() or ["Fusion"]
+        self._style_combo.addItems(available_styles)
         current = QApplication.style()
         if current:
             idx = self._style_combo.findText(

@@ -23,6 +23,7 @@ class MainWindowSyncTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.window = MainWindow()
+        self.window.load_preset("showcase-playground")
         self.window.show()
         self.app.processEvents()
 
@@ -97,7 +98,8 @@ class MainWindowSyncTests(unittest.TestCase):
             for index in range(self.window.element_library.count())
         }
 
-        self.assertEqual(preset_ids, {"showcase-playground"})
+        self.assertIn("showcase-playground", preset_ids)
+        self.assertIn("blank-canvas", preset_ids)
         self.assertIn("effect-stack", element_ids)
         self.assertIn("inspector-host", element_ids)
 

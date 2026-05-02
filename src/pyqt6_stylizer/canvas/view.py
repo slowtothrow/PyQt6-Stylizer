@@ -8,6 +8,8 @@ from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView, QWidget
 class StudioView(QGraphicsView):
     ELEMENT_MIME_TYPE = "application/x-pyqt6-stylizer-element"
     element_dropped = pyqtSignal(str, float, float)
+    # Emitted after every zoom change with the new x-scale factor (1.0 = 100%).
+    zoom_changed = pyqtSignal(float)
 
     def __init__(self, scene: QGraphicsScene, parent: QWidget | None = None) -> None:
         super().__init__(scene, parent)
@@ -147,3 +149,4 @@ class StudioView(QGraphicsView):
         self._zoom_steps = next_steps
         factor = 1.15 if zoom_in else 1 / 1.15
         self.scale(factor, factor)
+        self.zoom_changed.emit(self.transform().m11())

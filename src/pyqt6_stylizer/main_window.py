@@ -4,12 +4,13 @@ import json
 from pathlib import Path
 
 from PyQt6.QtCore import QMimeData, QSettings, QSignalBlocker, Qt
-from PyQt6.QtGui import QAction, QCloseEvent, QKeySequence
+from PyQt6.QtGui import QAction, QCloseEvent, QFont, QKeySequence
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QDockWidget,
     QFileDialog,
     QFrame,
+    QGroupBox,
     QInputDialog,
     QLabel,
     QListWidget,
@@ -17,6 +18,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QStatusBar,
     QToolBar,
     QTreeWidget,
@@ -64,6 +66,8 @@ class MainWindow(QMainWindow):
         self._settings = QSettings("slowtothrow", "PyQt6Stylizer")
         self._dock_widgets: list[QDockWidget] = []
         self._outliner_items: dict[str, QTreeWidgetItem] = {}
+        self._undo_stack: list[str] = []
+        self._redo_stack: list[str] = []
 
         self.setObjectName("mainWindow")
         self.setWindowTitle(f"PyQt6 Stylizer - {self.document.title}")
@@ -83,6 +87,7 @@ class MainWindow(QMainWindow):
 
         self.view = StudioView(self.scene, self)
         self.view.element_dropped.connect(self._handle_canvas_drop)
+        self.view.zoom_changed.connect(self._update_zoom_label)
         self.setCentralWidget(self.view)
 
         self.inspector_panel = InspectorPanel(self)
@@ -140,6 +145,20 @@ class MainWindow(QMainWindow):
         self.actual_size_action.setShortcut(QKeySequence("Ctrl+0"))
         self.actual_size_action.triggered.connect(self._reset_canvas_zoom)
 
+        self.new_canvas_action = QAction("New Canvas", self)
+        self.new_canvas_action.setShortcut(QKeySequence("Ctrl+N"))
+        self.new_canvas_action.triggered.connect(self._new_canvas)
+
+        self.undo_action = QAction("Undo", self)
+        self.undo_action.setShortcut(QKeySequence("Ctrl+Z"))
+        self.undo_action.setEnabled(False)
+        self.undo_action.triggered.connect(self._undo)
+
+        self.redo_action = QAction("Redo", self)
+        self.redo_action.setShortcut(QKeySequence("Ctrl+Shift+Z"))
+        self.redo_action.setEnabled(False)
+        self.redo_action.triggered.connect(self._redo)
+
         self.save_canvas_action = QAction("Save Current Canvas State…", self)
         self.save_canvas_action.setShortcut(QKeySequence("Ctrl+S"))
         self.save_canvas_action.setToolTip(
@@ -163,6 +182,11 @@ class MainWindow(QMainWindow):
 
     def _create_menus(self) -> None:
         file_menu = self.menuBar().addMenu("&File")
+        file_menu.addAction(self.new_canvas_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.undo_action)
+        file_menu.addAction(self.redo_action)
+        file_menu.addSeparator()
         file_menu.addAction(self.reload_preset_action)
         file_menu.addSeparator()
         file_menu.addAction(self.save_canvas_action)
@@ -200,18 +224,27 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.load_canvas_action)
         toolbar.addAction(self.export_code_action)
         toolbar.addSeparator()
+        toolbar.addAction(self.new_canvas_action)
+        toolbar.addAction(self.undo_action)
+        toolbar.addAction(self.redo_action)
+        toolbar.addSeparator()
         toolbar.addAction(self.reset_layout_action)
         toolbar.addSeparator()
 
         workflow_label = QLabel(
-            "Fit (F) · Frame (⇧F) · Duplicate (Ctrl+D) · Delete · Save (Ctrl+S) · Load (Ctrl+O) · Export Code (Ctrl+E)",
+            "New (Ctrl+N) · Undo (Ctrl+Z) · Redo (Ctrl+⇧Z) · Fit (F) · Frame (⇧F) · Dup (Ctrl+D) · Save (Ctrl+S) · Export (Ctrl+E)",
             toolbar,
         )
         workflow_label.setToolTip(
-            "Use F to fit the whole showcase, Shift+F to frame the current selection, "
-            "Ctrl+S to save canvas state, Ctrl+O to load one, Ctrl+E to export PyQt6 code."
+            "Ctrl+N blank canvas · Ctrl+Z/Ctrl+Shift+Z undo/redo · F fit canvas · Shift+F frame selection · "
+            "Ctrl+D duplicate · Ctrl+S save · Ctrl+O load · Ctrl+E export PyQt6 code."
         )
         toolbar.addWidget(workflow_label)
+
+        toolbar.addSeparator()
+        self._zoom_label = QLabel("Zoom: 100%", toolbar)
+        self._zoom_label.setMinimumWidth(80)
+        toolbar.addWidget(self._zoom_label)
 
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
 
@@ -252,18 +285,10 @@ class MainWindow(QMainWindow):
         )
 
         interaction_dock = self._add_dock(
-            title="Interaction Lab",
+            title="Signals & Slots",
             object_name="dock.interactions",
             area=Qt.DockWidgetArea.RightDockWidgetArea,
-            widget=self._build_list_widget(
-                [
-                    "Hover pulse",
-                    "Focus ring",
-                    "Loading shimmer",
-                    "Success state",
-                    "Error state",
-                ]
-            ),
+            widget=self._create_signals_slots_panel(),
         )
 
         # Global App Options — live QApplication controls
@@ -286,36 +311,24 @@ class MainWindow(QMainWindow):
         )
 
         user_test_dock = self._add_dock(
-            title="User Test Guide",
+            title="Getting Started",
             object_name="dock.userTestGuide",
             area=Qt.DockWidgetArea.BottomDockWidgetArea,
-            widget=self._create_user_test_guide(),
+            widget=self._create_getting_started_panel(),
         )
 
         tokens_dock = self._add_dock(
-            title="Tokens & Assets",
+            title="Theme Tokens",
             object_name="dock.tokens",
             area=Qt.DockWidgetArea.RightDockWidgetArea,
-            widget=self._build_list_widget(
-                [
-                    "palette.surface = #f8f3e6",
-                    "radius.card = 16",
-                    "shadow.soft = pending",
-                ]
-            ),
+            widget=self._create_theme_tokens_panel(),
         )
 
         history_dock = self._add_dock(
             title="History",
             object_name="dock.history",
             area=Qt.DockWidgetArea.BottomDockWidgetArea,
-            widget=self._build_list_widget(
-                [
-                    "Bootstrap document",
-                    "Seed demo scene",
-                    "Enable live block editing",
-                ]
-            ),
+            widget=self._create_history_panel(),
         )
 
         self.tabifyDockWidget(examples_dock, library_dock)
@@ -328,9 +341,7 @@ class MainWindow(QMainWindow):
         self.tabifyDockWidget(user_test_dock, history_dock)
         examples_dock.raise_()
         inspector_dock.raise_()
-        interaction_dock.hide()
-        tokens_dock.hide()
-        history_dock.hide()
+        user_test_dock.raise_()
 
     def _create_status_bar(self) -> None:
         status_bar = QStatusBar(self)
@@ -392,13 +403,13 @@ class MainWindow(QMainWindow):
         widget.addItems(entries)
         return widget
 
-    def _create_user_test_guide(self) -> QWidget:
+    def _create_getting_started_panel(self) -> QWidget:
         panel = QWidget(self)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        heading = QLabel("Initial user test focus")
+        heading = QLabel("Getting Started")
         heading.setStyleSheet("font-size: 16px; font-weight: 700;")
         layout.addWidget(heading)
 
@@ -406,20 +417,22 @@ class MainWindow(QMainWindow):
         self._user_test_summary.setWordWrap(True)
         layout.addWidget(self._user_test_summary)
 
-        instructions = QFrame(panel)
-        instructions_layout = QVBoxLayout(instructions)
-        instructions_layout.setContentsMargins(0, 0, 0, 0)
-        instructions_layout.setSpacing(6)
-        for prompt in (
-            "1. Pan across the showcase and say which examples feel instantly understandable versus dense or confusing.",
-            "2. Open at least one flyout and one dialog, then say whether their trigger points feel obvious.",
-            "3. Duplicate one example, move it, and change at least two values in Properties while watching the live preview update.",
-            "4. Edit the duplicated block JSON, click Apply Block, and say whether the canvas/code relationship feels obvious.",
+        steps_frame = QFrame(panel)
+        steps_layout = QVBoxLayout(steps_frame)
+        steps_layout.setContentsMargins(0, 0, 0, 0)
+        steps_layout.setSpacing(6)
+        for step in (
+            "1. Explore — Double-click a preset in the Showcase panel to load it onto the canvas.",
+            "2. Inspect & Edit — Click any element on the canvas, then change its values in the Properties panel.",
+            "3. Add an Element — Drag an item from 'Add to Canvas' onto the canvas, or double-click it.",
+            "4. Property Library — Scroll down in Properties to see the full library of CSS-style property suggestions.",
+            "5. Save & Export — Use Ctrl+S to save your canvas state; Ctrl+E to export runnable PyQt6 code.",
+            "6. Experiment Freely — Use Ctrl+Z to undo, Ctrl+N for a blank slate, Ctrl+D to duplicate any element.",
         ):
-            label = QLabel(prompt, instructions)
+            label = QLabel(step, steps_frame)
             label.setWordWrap(True)
-            instructions_layout.addWidget(label)
-        layout.addWidget(instructions)
+            steps_layout.addWidget(label)
+        layout.addWidget(steps_frame)
 
         layout.addStretch(1)
         self._refresh_user_test_guide()
@@ -499,6 +512,7 @@ class MainWindow(QMainWindow):
             return None
 
         self.document.nodes.append(node)
+        self._push_undo("Add element")
         self._rerender_and_reselect(node.node_id)
         self._frame_selection()
         self.statusBar().showMessage(f"Added {node.label}", 2500)
@@ -538,6 +552,7 @@ class MainWindow(QMainWindow):
             return
 
         duplicate = self._clone_node_tree(source, offset=(48.0, 48.0), rename_root=True)
+        self._push_undo(f"Duplicate {source.label}")
         self.document.nodes.append(duplicate)
         self._rerender_and_reselect(duplicate.node_id)
         self._frame_selection()
@@ -550,6 +565,7 @@ class MainWindow(QMainWindow):
             return
 
         removed_count = 0
+        self._push_undo("Delete selected")
         for node_id in list(selected_ids):
             if self.document.remove_node(node_id):
                 removed_count += 1
@@ -618,12 +634,15 @@ class MainWindow(QMainWindow):
             normalized = value
         elif key in {"label", "cta_label", "description", "fill"}:
             normalized = str(value)
+        if key not in {"x", "y", "width", "height"}:
+            self._push_undo(f"Change {key}")
         self.update_node_properties(node_id, {key: normalized}, rerender=True)
 
     def _handle_property_remove(self, node_id: str, key: str) -> None:
         node = self.document.find_node(node_id)
         if node is None or key not in node.properties:
             return
+        self._push_undo(f"Remove property: {key}")
         del node.properties[key]
         self._rerender_and_reselect(node_id)
 
@@ -673,6 +692,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Unable to apply block to the live document.", 3500)
             return
 
+        self._push_undo("Apply block")
         self._rerender_and_reselect(node_id)
         self.statusBar().showMessage(f"Applied block changes to {replacement.label}", 2500)
 
@@ -910,15 +930,18 @@ class MainWindow(QMainWindow):
         zoom_factor = float(recommended_zoom) if isinstance(recommended_zoom, (int, float)) else 1.0
         if self.view.fit_to_scene_contents(extra_scale=zoom_factor):
             self.statusBar().showMessage("Framed the full showcase on the canvas.", 2500)
+        self._update_zoom_label()
 
     def _frame_selection(self) -> None:
         if self.view.frame_selected_items(extra_scale=0.96):
             self.statusBar().showMessage("Framed the selected example.", 2500)
+            self._update_zoom_label()
             return
         self.statusBar().showMessage("Select an example before framing the selection.", 2500)
 
     def _reset_canvas_zoom(self) -> None:
         self.view.reset_zoom()
+        self._update_zoom_label()
         self.statusBar().showMessage("Reset the canvas zoom to actual size.", 2500)
 
     def _rerender_and_reselect(self, node_id: str | None) -> None:
@@ -927,16 +950,13 @@ class MainWindow(QMainWindow):
         if node_id is not None:
             self.scene.select_node(node_id)
         self._handle_scene_selection_change()
+        self._refresh_theme_tokens_panel()
 
     def _reset_layout(self) -> None:
         for dock in self._dock_widgets:
             dock.show()
         self.removeToolBar(self.findChild(QToolBar, "mainToolbar"))
         self._create_toolbar()
-        for object_name in ("dock.interactions", "dock.tokens", "dock.history"):
-            dock = self.findChild(QDockWidget, object_name)
-            if dock is not None:
-                dock.hide()
         self.statusBar().showMessage("Layout reset to the simpler guided workspace.", 3500)
 
     def _handle_outliner_selection_change(self) -> None:
@@ -972,3 +992,191 @@ class MainWindow(QMainWindow):
         self.duplicate_selected_action.setEnabled(len(selected_ids) == 1)
         self.delete_selected_action.setEnabled(bool(selected_ids))
         self.frame_selection_action.setEnabled(bool(selected_ids))
+
+    # ── New Canvas ────────────────────────────────────────────────────────────
+
+    def _new_canvas(self) -> None:
+        """Replace the current document with a blank canvas and clear undo history."""
+        blank = self.preset_registry.instantiate("blank-canvas")
+        if blank is None:
+            blank = StudioDocument(title="Blank Canvas", nodes=[], theme_tokens=[], interactions=[], workspace_state={}, meta={})
+        self.document = blank
+        self._current_preset_id = "blank-canvas"
+        self._undo_stack.clear()
+        self._redo_stack.clear()
+        self._update_undo_actions()
+        self.setWindowTitle("PyQt6 Stylizer - Blank Canvas")
+        self._update_reload_action()
+        self._rerender_and_reselect(None)
+        self.statusBar().showMessage("New blank canvas created. Drag elements from 'Add to Canvas' to get started.", 3000)
+
+    # ── Undo / Redo ───────────────────────────────────────────────────────────
+
+    def _push_undo(self, description: str = "Action") -> None:
+        self._undo_stack.append(self.document.to_json())
+        self._redo_stack.clear()
+        if len(self._undo_stack) > 50:
+            self._undo_stack.pop(0)
+        self._update_undo_actions()
+        self._append_history(description)
+
+    def _undo(self) -> None:
+        if not self._undo_stack:
+            return
+        self._redo_stack.append(self.document.to_json())
+        raw = self._undo_stack.pop()
+        self.document = StudioDocument.from_json(raw)
+        self._current_preset_id = ""
+        self._update_reload_action()
+        self._rerender_and_reselect(None)
+        self._update_undo_actions()
+        self.statusBar().showMessage("Undo.", 2000)
+
+    def _redo(self) -> None:
+        if not self._redo_stack:
+            return
+        self._undo_stack.append(self.document.to_json())
+        raw = self._redo_stack.pop()
+        self.document = StudioDocument.from_json(raw)
+        self._current_preset_id = ""
+        self._update_reload_action()
+        self._rerender_and_reselect(None)
+        self._update_undo_actions()
+        self.statusBar().showMessage("Redo.", 2000)
+
+    def _update_undo_actions(self) -> None:
+        self.undo_action.setEnabled(bool(self._undo_stack))
+        self.redo_action.setEnabled(bool(self._redo_stack))
+
+    # ── Zoom label ────────────────────────────────────────────────────────────
+
+    def _update_zoom_label(self, scale: float | None = None) -> None:
+        if not hasattr(self, "_zoom_label"):
+            return
+        if scale is None:
+            scale = self.view.transform().m11()
+        pct = int(round(scale * 100))
+        self._zoom_label.setText(f"Zoom: {pct}%")
+
+    # ── History panel helpers ─────────────────────────────────────────────────
+
+    def _append_history(self, description: str) -> None:
+        if not hasattr(self, "_history_list"):
+            return
+        item = QListWidgetItem(description)
+        self._history_list.insertItem(0, item)
+        if self._history_list.count() > 30:
+            self._history_list.takeItem(self._history_list.count() - 1)
+
+    def _create_history_panel(self) -> QWidget:
+        panel = QWidget(self)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        heading = QLabel("Edit History")
+        heading.setStyleSheet("font-size: 14px; font-weight: 700;")
+        layout.addWidget(heading)
+
+        note = QLabel("Most-recent actions appear at the top. Use Ctrl+Z / Ctrl+Shift+Z to undo or redo.")
+        note.setWordWrap(True)
+        note.setStyleSheet("color: #405261; font-size: 11px;")
+        layout.addWidget(note)
+
+        self._history_list = QListWidget(panel)
+        layout.addWidget(self._history_list, stretch=1)
+
+        clear_btn = QPushButton("Clear History", panel)
+        clear_btn.clicked.connect(self._history_list.clear)
+        layout.addWidget(clear_btn)
+
+        return panel
+
+    # ── Theme Tokens panel helpers ────────────────────────────────────────────
+
+    def _refresh_theme_tokens_panel(self) -> None:
+        if not hasattr(self, "_theme_tokens_list"):
+            return
+        with QSignalBlocker(self._theme_tokens_list):
+            self._theme_tokens_list.clear()
+            if not self.document.theme_tokens:
+                self._theme_tokens_list.addItem("(no tokens in this document)")
+                return
+            for token in self.document.theme_tokens:
+                self._theme_tokens_list.addItem(f"{token.name} = {token.value!r}  [{token.category}]")
+
+    def _create_theme_tokens_panel(self) -> QWidget:
+        panel = QWidget(self)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        heading = QLabel("Theme Tokens")
+        heading.setStyleSheet("font-size: 14px; font-weight: 700;")
+        layout.addWidget(heading)
+
+        note = QLabel(
+            "Design tokens from the current document. Load a different example preset to see "
+            "how tokens change. Tokens drive colour, spacing, and shape across the whole canvas."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color: #405261; font-size: 11px;")
+        layout.addWidget(note)
+
+        self._theme_tokens_list = QListWidget(panel)
+        layout.addWidget(self._theme_tokens_list, stretch=1)
+
+        self._refresh_theme_tokens_panel()
+        return panel
+
+    # ── Signals & Slots panel ─────────────────────────────────────────────────
+
+    def _create_signals_slots_panel(self) -> QWidget:
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+
+        inner = QWidget(scroll)
+        scroll.setWidget(inner)
+        layout = QVBoxLayout(inner)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
+
+        heading = QLabel("Signals & Slots — PyQt6 Core Concept")
+        heading.setStyleSheet("font-size: 14px; font-weight: 700;")
+        layout.addWidget(heading)
+
+        explanation = QLabel(
+            "<b>Signals</b> are notifications emitted by a widget when something happens "
+            "(e.g. a button is clicked).<br>"
+            "<b>Slots</b> are ordinary Python methods that respond to those notifications.<br>"
+            "You connect them with <code>widget.signal.connect(slot)</code>."
+        )
+        explanation.setWordWrap(True)
+        explanation.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(explanation)
+
+        examples = [
+            ("Button click",
+             "button = QPushButton('Click me')\nbutton.clicked.connect(self.on_click)\n\ndef on_click(self):\n    print('Button was clicked!')"),
+            ("Text changed",
+             "line_edit = QLineEdit()\nline_edit.textChanged.connect(self.on_text)\n\ndef on_text(self, text: str):\n    print(f'Text is now: {text}')"),
+            ("Slider value",
+             "slider = QSlider(Qt.Orientation.Horizontal)\nslider.valueChanged.connect(self.on_value)\n\ndef on_value(self, value: int):\n    print(f'Slider: {value}')"),
+            ("Custom signal",
+             "from PyQt6.QtCore import pyqtSignal, QObject\n\nclass Counter(QObject):\n    count_changed = pyqtSignal(int)\n\n    def increment(self):\n        self._n += 1\n        self.count_changed.emit(self._n)"),
+        ]
+
+        for title, code in examples:
+            group = QGroupBox(title, inner)
+            g_layout = QVBoxLayout(group)
+            code_label = QLabel(f"<pre>{code}</pre>", group)
+            code_label.setTextFormat(Qt.TextFormat.RichText)
+            code_label.setStyleSheet(
+                "background: #f4f4f4; padding: 6px; border-radius: 4px; font-size: 11px;"
+            )
+            g_layout.addWidget(code_label)
+            layout.addWidget(group)
+
+        layout.addStretch(1)
+        return scroll

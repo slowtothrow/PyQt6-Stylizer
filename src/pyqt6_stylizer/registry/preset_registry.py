@@ -119,6 +119,12 @@ class PresetRegistry:
         return cls(
             definitions=[
                 PresetDefinition(
+                    preset_id="blank-canvas",
+                    display_name="Blank Canvas",
+                    summary="An empty canvas to start from scratch. Drag elements from 'Add to Canvas', style them in Properties, then export to Python code.",
+                    document_factory=_blank_canvas_document,
+                ),
+                PresetDefinition(
                     preset_id="showcase-playground",
                     display_name="UI Showcase Playground",
                     summary="One giant canvas packed with simple controls, dense nested shells, flyouts, dialogs, tables, effects, and styling studies.",
@@ -132,8 +138,28 @@ class PresetRegistry:
                     ),
                 ),
             ],
-            default_preset_id="showcase-playground",
+            default_preset_id="blank-canvas",
         )
+
+
+def _blank_canvas_document() -> StudioDocument:
+    """A completely empty canvas — ideal starting point for beginners."""
+    return StudioDocument(
+        title="Blank Canvas",
+        experience_level=ExperienceLevel.BASIC.value,
+        nodes=[],
+        theme_tokens=[
+            ThemeToken(name="palette.surface", value="#f8f3e6", category="palette"),
+            ThemeToken(name="palette.accent", value="#4a90d9", category="palette"),
+            ThemeToken(name="radius.card", value=8, category="shape"),
+        ],
+        interactions=[],
+        workspace_state={"active_panel": "library"},
+        meta={
+            "preset_id": "blank-canvas",
+            "hint": "Drag any element from 'Add to Canvas', then select it and edit in Properties.",
+        },
+    )
 
 
 def _showcase_playground_document() -> StudioDocument:

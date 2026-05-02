@@ -256,6 +256,14 @@ _PROPERTY_LIBRARY: list[tuple[str, list[_PropExample]]] = [
 ]
 
 
+def _looks_like_hex_color(s: str) -> bool:
+    s = s.strip()
+    if not s.startswith("#"):
+        return False
+    hex_part = s[1:]
+    return len(hex_part) in (3, 6) and all(c in "0123456789abcdefABCDEF" for c in hex_part)
+
+
 class InspectorPanel(QWidget):
     CORE_PROPERTY_KEYS = {"x", "y", "width", "height", "cta_label", "description", "fill"}
 
@@ -272,7 +280,21 @@ class InspectorPanel(QWidget):
         self._dynamic_property_editors: dict[str, QWidget] = {}
         self._dynamic_property_remove_buttons: dict[str, QPushButton] = {}
 
-        layout = QVBoxLayout(self)
+        # Wrap everything in a scroll area so properties are never clipped on
+        # smaller displays.  The outer layout simply holds the scroll area.
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        outer.addWidget(scroll)
+
+        inner = QWidget(scroll)
+        scroll.setWidget(inner)
+
+        layout = QVBoxLayout(inner)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(12)
 
@@ -668,6 +690,30 @@ class InspectorPanel(QWidget):
                     lambda property_key=key, widget=text_editor: self._emit_property_change(property_key, widget.text())
                 )
                 editor = text_editor
+                # Add a colour swatch button for hex colour strings so the user
+                # can pick a colour visually instead of typing hex digits.
+                if _looks_like_hex_color(str(value)):
+                    swatch = QPushButton(row)
+                    swatch.setFixedSize(24, 24)
+                    swatch.setToolTip("Click to pick a colour")
+                    swatch.setStyleSheet(f"background-color: {value}; border: 1px solid #888;")
+
+                    def _on_swatch_clicked(
+                        _checked: bool = False,
+                        _editor: QLineEdit = text_editor,
+                        _swatch: QPushButton = swatch,
+                        _key: str = key,
+                    ) -> None:
+                        initial = QColor(_editor.text()) if QColor(_editor.text()).isValid() else QColor()
+                        color = QColorDialog.getColor(initial, self, "Choose colour")
+                        if color.isValid():
+                            hex_val = color.name()
+                            _editor.setText(hex_val)
+                            _swatch.setStyleSheet(f"background-color: {hex_val}; border: 1px solid #888;")
+                            self._emit_property_change(_key, hex_val)
+
+                    swatch.clicked.connect(_on_swatch_clicked)
+                    row_layout.addWidget(swatch)
 
             row_layout.addWidget(editor, stretch=1)
             remove_button = QPushButton("Remove", row)

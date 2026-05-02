@@ -52,6 +52,17 @@ _KIND_TO_CLASS: dict[str, str] = {
     "elegant-patterns": "QFrame",
     "dense-patterns": "QFrame",
     "duplicate-remix": "QFrame",
+    # Widget-preview kinds present in the default showcase
+    "choice-matrix": "QGroupBox",
+    "slider-lab": "QSlider",
+    "flyout-lab": "QWidget",
+    "dialog-lab": "QDialog",
+    "scroll-gallery": "QScrollArea",
+    "navigation-workspace": "QWidget",
+    "inspector-tree": "QTreeWidget",
+    "data-table-console": "QTableWidget",
+    "workspace-shell": "QWidget",
+    "effects-lab": "QWidget",
 }
 
 # Widgets that live in QtWidgets
